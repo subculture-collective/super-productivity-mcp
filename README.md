@@ -49,7 +49,8 @@ Super Productivity
 - Manage projects, tags, standalone notes, counters and habit values; read focus-mode state.
 - Attach a Gitea repository to a project as an issue provider. This needs a patched Super Productivity build; see [docs/repository-attachment.md](docs/repository-attachment.md).
 - Limit what each client can read or change with access scopes (`SP_MCP_SCOPES`).
-- Broad writes are dry-run first, and every tool carries MCP hints (`readOnlyHint`, `destructiveHint` and others) so clients can ask before a destructive call.
+- `auto_schedule_tasks` and `compact_task_notes` default to a dry run and apply only with `dryRun:false` plus `confirmApply:true`. `bulk_update_tasks`, `bulk_reschedule_tasks` and `clear_schedule_for_day` preview only when you pass `dryRun:true`; `bulk_complete_tasks` has no preview.
+- Every tool carries MCP hints (`readOnlyHint`, `destructiveHint` and others) so clients can ask before a destructive call.
 
 ## Prerequisites
 
@@ -219,7 +220,7 @@ Safety notes:
 - `create_task` accepts `dueDate`, `dueTime` and a compact `repeat` (`{ "cycle": "weekly", "every": 2, "weekdays": ["mon", "thu"] }`). Pass `literal:true` to keep `#tag`, `+project`, `@date` and estimates in the title as plain text, which is the safer choice for text that came from somewhere else. On stock v20 `repeat` needs Local REST: the server checks it first, creates the task once, then attaches the recurrence. If the task is created but the recurrence fails, the result carries `taskId` and `recurrenceError` instead of failing, so a retry does not duplicate the task.
 - When a non-idempotent write times out after the plugin picked it up, the error is `OUTCOME_UNKNOWN` (not retryable): check the current state before retrying.
 - `list_tasks`, `list_projects` and `list_tags` are aliases of `get_tasks`, `get_projects` and `get_tags`, matching Super Productivity's built-in MCP. `get_tasks` also reports `truncated` when `limit` or `offset` left matches out.
-- Broad schedule and note writes are dry-run-first where possible. Use `dryRun:false` plus `confirmApply:true` only after inspecting returned diffs.
+- Automatic scheduling and note compaction are dry-run first; apply them with `dryRun:false` plus `confirmApply:true` only after inspecting the returned diffs. Bulk update and reschedule apply immediately unless you pass `dryRun:true`.
 - True archive uses Super Productivity's Local REST API, which the MCP server calls itself. Without `SP_LOCAL_REST_URL` or `SUPER_PRODUCTIVITY_REST_URL`, `archive_task` only marks done when `allowDoneFallback:true` is explicitly supplied. `restore_task` also goes through Local REST and has no fallback. A failed REST call is never retried through the plugin; see [`docs/local-rest.md`](docs/local-rest.md).
 - Recurrence writes (`set_task_recurrence`, `update_task_recurrence`, `delete_task_recurrence`) go through Local REST and accept only the schedule fields stock v20 can write; other fields fail before anything changes. `SP_MCP_RECURRENCE_ROUTE=plugin` selects the older plugin path, which needs a Super Productivity build that allows repeat-config plugin actions; only there does `isAskToUpdateAllTaskInstances:true` ask the app to update existing instances.
 
