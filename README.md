@@ -7,55 +7,49 @@
 
 A [SUBCULT](https://subcult.tv) project.
 
-**A local-first productivity integration that lets AI clients work safely with Super Productivity.** It combines a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server, desktop quick-add launcher, in-app plugin bridge, and agent skill bundle into one versioned suite.
+super-productivity-mcp lets AI clients such as Claude Desktop, Cursor, VS Code (Copilot) and OpenCode read and change your tasks in [Super Productivity](https://super-productivity.com/), a local task manager. Ask your assistant to create tasks, list projects, log time or clean up a schedule. A desktop quick-add command adds tasks without opening an AI client.
 
-| Challenge | Outcome |
-| --- | --- |
-| Give AI clients useful task controls without exposing a hosted task service. | A Go MCP server and a Super Productivity plugin communicate through explicit, file-based IPC. |
-| Make fast capture practical outside an AI client. | `sp-quick-add` adds desktop task capture through the same bridge and safety model. |
-| Keep a growing tool surface dependable. | A single catalog drives the server, plugin, skill bundle, generated docs, and CI drift checks. |
+Everything runs on your machine. Task data stays in your Super Productivity installation; nothing goes through a hosted service. The current release is v0.1.0.
 
-The suite is deliberately **local-first**: task data stays in the user-controlled Super Productivity installation. High-impact scheduling and write operations are dry-run/confirmation oriented, and true archive/restore requires an explicitly configured local API.
+## What is in the suite
 
-**Release readiness:** the repository ships as one compatibility unit (MCP server, plugin, quick-add, and skills). Run `make verify-release` before publishing the initial `v0.1.0` release. Licensed under [MIT](LICENSE).
+| Artifact | What it does | Install target |
+| --- | --- | --- |
+| `sp-mcp` | [Model Context Protocol](https://modelcontextprotocol.io/) server for AI clients (Go, stdio) | `make install-mcp` |
+| `sp-quick-add` | Desktop quick-add prompt | `make install-quick-add` |
+| Super Productivity plugin | Bridge inside the app that carries out each request | `make install-plugin` or `make package-plugin` |
+| `skill/super-productivity-mcp` | Instructions and diagnostics that help an AI client use the tools | `make install-skill` |
 
-With this suite you can ask your AI assistant to create tasks, list projects, add tracked time, and more. You can also use `sp-quick-add` to add tasks from your desktop without opening an AI client.
+Build and install all four from the same commit; they are versioned together.
 
 ## How it works
 
 ```
-AI client (Claude / Cursor / VS Code)
+AI client (Claude / Cursor / VS Code / OpenCode)
     │  MCP JSON-RPC over stdio
     ▼
-sp-mcp
+sp-mcp ──────────────► Local REST API (optional: archive, restore, tracking, recurrence)
     │
     │  file IPC  (inbox / outbox / deadletter)
     ▼
-Super Productivity plugin bridge
-    ▲
-    │  file IPC task.create
-    │
-sp-quick-add  (Walker prompt)
-    │
-    ▼
-Super Productivity PluginAPI
+Super Productivity plugin bridge  ◄── sp-quick-add (file IPC task.create)
     │
     ▼
 Super Productivity
 ```
 
-`sp-mcp` and `sp-quick-add` are separate clients of the same plugin bridge. The plugin bridge runs inside Super Productivity and is required for either client to create or read tasks.
+`sp-mcp` and `sp-quick-add` are separate clients of the same plugin bridge. The plugin must be installed and enabled in Super Productivity for either one to work. Some operations (true archive, restore, time tracking and recurrence) also use Super Productivity's Local REST API; see [docs/local-rest.md](docs/local-rest.md).
 
-## Suite artifacts
+## Features
 
-| Artifact | What it does | Install target |
-| --- | --- | --- |
-| `sp-mcp` | MCP server for AI clients | `make install-mcp` |
-| `sp-quick-add` | Desktop quick-add launcher | `make install-quick-add` |
-| Super Productivity plugin zip | In-app bridge that executes catalog actions | `make install-plugin` or `make package-plugin` |
-| `skill/super-productivity-mcp` | Agent skill bundle and diagnostics | `make install-skill` |
-
-`make install` installs the full suite. The per-artifact targets are convenience profiles; the supported release unit is still the suite built from one commit.
+- Create tasks with Super Productivity's short syntax (`#tag`, `+project`, `@due`, estimates like `30m`), with subtasks, due dates and a repeat rule. `literal:true` keeps that syntax as plain text.
+- Read, update, complete, archive, restore and delete tasks; complete, update and reschedule tasks in bulk.
+- Track time, log time for a day and read the worklog.
+- Check schedule health, find stale or unscheduled work, and preview and apply automatic scheduling.
+- Manage projects, tags, standalone notes, counters and habit values; read focus-mode state.
+- Attach a Gitea repository to a project as an issue provider. This needs a patched Super Productivity build; see [docs/repository-attachment.md](docs/repository-attachment.md).
+- Limit what each client can read or change with access scopes (`SP_MCP_SCOPES`).
+- Broad writes are dry-run first, and every tool carries MCP hints (`readOnlyHint`, `destructiveHint` and others) so clients can ask before a destructive call.
 
 ## Prerequisites
 
@@ -72,7 +66,7 @@ Super Productivity
 One-shot installer — builds the MCP and quick-add binaries, sets up the IPC data directory, installs the skill, packages the plugin zip, and prints the MCP client config:
 
 ```bash
-git clone https://github.com/PatrickFanella/super-productivity-mcp.git
+git clone https://github.com/subculture-collective/super-productivity-mcp.git
 cd super-productivity-mcp
 make install
 ```
@@ -95,7 +89,7 @@ Honored env vars: `PREFIX`, `BIN_DIR`, `BUILD_DIR`, `DATA_DIR`, `SKILLS_DIR`, `S
 #### 1. Build the binaries
 
 ```bash
-git clone https://github.com/PatrickFanella/super-productivity-mcp.git
+git clone https://github.com/subculture-collective/super-productivity-mcp.git
 cd super-productivity-mcp
 go build -o sp-mcp ./cmd/sp-mcp
 go build -o sp-quick-add ./cmd/sp-quick-add
@@ -157,7 +151,7 @@ OpenCode example:
 }
 ```
 
-## Environment variables
+## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -177,8 +171,6 @@ The plugin inside Super Productivity must be configured to use the **same** `SP_
 
 See [`docs/local-rest.md`](docs/local-rest.md) for Local REST setup, supported tools, fallbacks, and troubleshooting.
 
-Live checks against stock Super Productivity v20 follow [`docs/verification/v20-qualification.md`](docs/verification/v20-qualification.md); results are recorded in [`docs/verification/v20-qualification-report.md`](docs/verification/v20-qualification-report.md).
-
 ### Access scopes
 
 `SP_MCP_SCOPES` limits what a client connected to this server can see and do. Leaving it unset grants every scope, which is the behaviour before scopes existed.
@@ -196,9 +188,9 @@ Examples: `read,notes` for a read-only assistant; `create` for capture only; `re
 
 The scope is set per server process, so give each client its own MCP server entry when they need different grants. It limits what the MCP client can ask for; it is not a boundary against anything else that can write to `SP_MCP_DATA_DIR` or that runs inside Super Productivity.
 
-## Omarchy / Hyprland quick add
+## Desktop quick add
 
-`sp-quick-add` opens a prompt and creates a Super Productivity task through the same plugin IPC bridge as the MCP server. It does not require `sp-mcp`, but it does require the Super Productivity plugin bridge to be installed and enabled. Walker provides the prompt. It supports the same task title short syntax handled by `create_task` (`#tag`, `+project`, `@due`, estimates like `30m`).
+`sp-quick-add` opens a prompt and creates a Super Productivity task through the same plugin IPC bridge as the MCP server. It does not require `sp-mcp`, but it does require the Super Productivity plugin bridge to be installed and enabled. The prompt uses Walker, a Linux app launcher, so quick add needs Walker installed. It supports the same task title short syntax handled by `create_task` (`#tag`, `+project`, `@due`, estimates like `30m`).
 
 ```bash
 sp-quick-add
@@ -206,7 +198,7 @@ sp-quick-add --title "Write docs @today #work 30m"
 sp-quick-add --dry-run --title "Smoke quick add @today"
 ```
 
-Recommended Omarchy/Hyprland binding:
+Example Hyprland binding (Omarchy):
 
 ```conf
 bindd = SUPER SHIFT, T, Super Productivity quick add, exec, uwsm-app -- /home/you/.local/bin/sp-quick-add
@@ -214,8 +206,7 @@ bindd = SUPER SHIFT, T, Super Productivity quick add, exec, uwsm-app -- /home/yo
 
 ## Available tools
 
-The MCP tool and resource surface is catalog-derived. Do not maintain a second
-manual list in this README.
+The server exposes 69 tools and 12 `sp://` resources. They cover tasks and subtasks, recurrence, archive and restore, time tracking and worklogs, scheduling and schedule cleanup, projects, tags, standalone notes, counters, habits, focus mode, notifications and bridge diagnostics. The full list is generated from the catalog:
 
 - Source of truth: [`internal/catalog/tools.json`](internal/catalog/tools.json)
 - Generated Markdown view: [`docs/tools.md`](docs/tools.md)
@@ -257,7 +248,7 @@ To install in Super Productivity:
 
 ### MCP eval scenarios
 
-Read-only MCP evaluation scenarios live in [`docs/evals/mcp-schedule-evals.xml`](docs/evals/mcp-schedule-evals.xml). They document stable agent-use questions for the schedule cleanup, discovery, archive/restore, dry-run, and resource surfaces. `make test` runs `scripts/check-evals.js` to enforce well-formed scenario coverage against the current catalog.
+Read-only MCP evaluation scenarios live in [`docs/evals/mcp-schedule-evals.xml`](docs/evals/mcp-schedule-evals.xml). They describe questions an AI client should be able to answer for the schedule cleanup, discovery, archive/restore, dry-run, and resource surfaces. `make test` runs `scripts/check-evals.js` to enforce well-formed scenario coverage against the current catalog.
 
 ### Run tests
 
@@ -315,12 +306,8 @@ CI enforces that the copies never drift from the source (`make check-catalogs`).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Report bugs and request features in [GitHub issues](https://github.com/subculture-collective/super-productivity-mcp/issues). Open pull requests on GitHub against `main`; CI runs `make test` (catalog drift, Go, JavaScript, end-to-end and eval checks) on every pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and [SECURITY.md](SECURITY.md) for reporting security problems.
 
 ## License
 
 [MIT](LICENSE)
-
-### Repository attachment
-
-See [Gitea repository attachment](docs/repository-attachment.md) for the two provider tools, credential handling, companion app patch, and installation requirements.
